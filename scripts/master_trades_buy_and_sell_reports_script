@@ -1,3 +1,4 @@
+
 import sys
 from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
@@ -134,11 +135,13 @@ from otc_trades
 where
  wallet_account NOT LIKE '%osl.com'
 AND wallet_account NOT LIKE '%bc.holdings'
-AND wallet_account NOT LIKE '%ftx.mobile.otc@pdax.ph')a
+AND wallet_account NOT LIKE '%ftx.mobile.otc@pdax.ph'
+and lower(status) = 'successful')a
 WHERE (CASE WHEN jobRunMode = 1 then ( (p_file_date < date_sub(date_delay,1)) AND (p_file_date = otc_filename) )
      WHEN jobRunMode <> 1 then (update_date >= '{}' AND update_date <= '{}')
 END)
 """.format(now_date, start_date, end_date)
+
 otc_trades_df = spark.sql(query)
 
 query="""
@@ -248,10 +251,12 @@ AND a.p_date = b.p_date)a
 osl_trades_df = spark.sql(query)
 
 final_df = osl_trades_df.union(otc_trades_df)
+
 spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 final_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/master_transaction/trades_buy_and_sell/")
 
 data_dynamicframe = DynamicFrame.fromDF(final_df.repartition(1), glueContext, "data_dynamicframe")
+data_dynamicframe.count()
 AmazonRedshift_node5 = glueContext.write_dynamic_frame.from_catalog(
     frame=data_dynamicframe,
     database="pdax_data_infra_reports",
