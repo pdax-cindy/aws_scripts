@@ -146,7 +146,8 @@ date_sub(current_date,"""+dateDelay+""") as date_delay,
 from_utc_timestamp('{}', 'Asia/Manila') as process_date_timestamp
 from 
 otc_transfers
-where txn_type in ('crypto_in','crypto_out'))a
+where txn_type in ('crypto_in','crypto_out')
+and lower(status) = 'completed')a
 WHERE (CASE WHEN jobRunMode = 1 then ( (p_date < date_sub(date_delay,1)) AND (p_date = otc_filename) )
      WHEN jobRunMode <> 1 then (update_date >= '{}' AND update_date <= '{}')
 END)
@@ -169,7 +170,9 @@ where transactiontype = 'crypto_in'
 """
 crypto_in = spark.sql(query)
 
-query="""SELECT
+query="""
+
+SELECT
 username,
 case when transactiontype = 'crypto_out' then 'cryptoOut' end as transactiontype,
 debit_ccy as ccy,
