@@ -157,7 +157,8 @@ date_sub(current_date,"""+dateDelay+""") as date_delay,
 from_utc_timestamp('{}', 'Asia/Manila') as process_date_timestamp
 from 
 otc_transfers
-where txn_type in ('deposit','withdrawal'))
+where txn_type in ('deposit','withdrawal')
+and lower(status) = 'completed')a
 WHERE
 (CASE WHEN jobRunMode = 1 then ( (p_date < date_sub(date_delay,1)) AND (input_file_name_date = otc_filename) )
      WHEN jobRunMode <> 1 then (update_date >= '{}' AND update_date <= '{}')
