@@ -196,7 +196,7 @@ transactiontype,
 CASE 
    WHEN ccy = 'BNB_BSC' then 'BNB'
    WHEN ccy = 'AXS_RON' then 'AXS'
-   WHEN ccy = 'BUSD_BSC' then 'BUSD'
+   WHEN ccy in ('BUSD_BSC','BUSD') then 'BUSD'
    WHEN ccy = 'MATIC_POLYGON' then 'MATIC'
    WHEN ccy = 'SLP_RON' then 'SLP'
    WHEN ccy = 'TERRA_USD' then 'UST'
