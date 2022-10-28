@@ -132,9 +132,9 @@ SELECT
 wallet_account as username,
 txn_type as transactiontype,
 credit_ccy,
-cast(credit_net_amount as decimal(19,4)) as credit_amount,
+cast(credit_net_amount as decimal(19,6)) as credit_amount,
 debit_ccy,
-cast(debit_net_amount as decimal(19,4)) as debit_amount,
+cast(debit_net_amount as decimal(19,6)) as debit_amount,
 update_date,
 cast(from_utc_timestamp(update_date, 'Asia/Manila') as timestamp) as transactiondatetime,
 'mob_otc' as channel,
@@ -203,7 +203,7 @@ CASE
    WHEN ccy = 'WETHMATIC' then 'ETH'
    WHEN ccy = 'WETH_POLYGON' then 'ETH'
    WHEN ccy = 'XLM_USDC_5F3T' then 'USDT'
-   WHEN ccy like '%UDS%' then 'USDT'
+   WHEN ccy like '%USD%' then 'USDT'
 else ccy end as ccy,
 amount,
 transactiondatetime,
