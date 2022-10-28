@@ -110,24 +110,24 @@ producttype,
 process_date_timestamp,
 p_date
 FROM(
-SELECT substr(input_file_name,48,10) as p_date,
-email as username,
+SELECT 
+to_date(update_date) as p_date,
+lower(email) as username,
 method as transactiontype,
 'PHP' as ccy,
 amount,
 channel as funding_channel,
-update_date,
-from_utc_timestamp(update_date, 'Asia/Manila') as transactiondatetime,
+update_date as transactiondatetime,
 'osl' as channel,
 """+jobRunMode+""" as jobRunMode,
 date_sub(current_date,"""+dateDelay+""") as date_delay,
 from_utc_timestamp('{}', 'Asia/Manila') as process_date_timestamp,
 'Cash In/Out' as producttype,
-row_number()OVER (partition BY email,reference_number ORDER BY update_date DESC) AS rown
+row_number()OVER (partition BY lower(email),reference_number ORDER BY update_date DESC) AS rown
     FROM payments
     WHERE status = 'success'
-    AND email NOT LIKE '%osl.com'
-    AND email NOT LIKE '%bc.holdings'
+    AND lower(email) NOT LIKE '%osl.com'
+    AND lower(email) NOT LIKE '%bc.holdings'
     )
 WHERE rown = 1
 AND (
@@ -144,9 +144,9 @@ SELECT
 wallet_account as username,
 txn_type as transactiontype,
 credit_ccy,
-cast(credit_amount as decimal(19,4)) as credit_amount,
+cast(credit_amount as decimal(19,6)) as credit_amount,
 debit_ccy,
-cast(debit_amount as decimal(19,4)) as debit_amount,
+cast(debit_amount as decimal(19,6)) as debit_amount,
 update_date,
 from_utc_timestamp(update_date, 'Asia/Manila') as transactiondatetime,
 substr(input_file_name,69,10) as input_file_name_date,
