@@ -133,10 +133,9 @@ FROM otc_transfers_raw_TEMP)a
 WHERE
 (CASE WHEN jobRunMode = 1 THEN (date_sub(update_date_pst_date,1) = filename_DATE)
       WHEN jobRunMode <> 1 THEN (date_sub(date_delay,1)= filename_DATE
-                                AND (update_date >= '{}' AND update_date <= '{}'))
+                               AND (update_date >= '{}' AND update_date <= '{}'))
       END)
 """.format(now_date, start_date, end_date)
-
 
 otc_transfers_df = spark.sql(query)
 spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
