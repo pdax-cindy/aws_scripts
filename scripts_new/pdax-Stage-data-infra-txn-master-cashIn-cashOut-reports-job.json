@@ -7,7 +7,7 @@
   },
   "command" : {
     "name" : "glueetl",
-    "scriptLocation" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/master_transaction_report/scripts_new/pdax-Stage-data-infra-txn-master-cashIn-cashOut-reports-job.py",
+    "scriptLocation" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/master-transaction-report/scripts_new/pdax-Stage-data-infra-txn-master-cashIn-cashOut-reports-job.py",
     "pythonVersion" : "3"
   },
   "defaultArguments" : {
