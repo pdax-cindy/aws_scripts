@@ -85,8 +85,10 @@ CASE
   WHEN sender_uuid LIKE '%<nil>%' THEN null else sender_uuid
 END as sender_uuid,
 CASE 
-  WHEN receiver_uuid LIKE '%<nil>%' THEN null else receiver_uuid
-END as receiver_uuid,
+  WHEN receiver_uuid LIKE '%<nil>%' THEN null
+  WHEN lower(receiver_uuid) like '%destinationaddress%' then replace(replace(replace(lower(receiver_uuid),'\"',''),'destinationaddress:',''),',','')
+  else trim(receiver_uuid)
+ END as receiver_uuid,
 txn_type,
 CASE 
   WHEN credit_ccy LIKE '%<nil>%' THEN null else credit_ccy
