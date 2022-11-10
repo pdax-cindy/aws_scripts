@@ -73,10 +73,10 @@ user_id,
 transaction_id,
 replace(trim(wallet_account),'"','') as wallet_account,
 CASE 
-  WHEN ops_con_uuid LIKE '%<nil>%' THEN null else ops_con_uuid
+  WHEN ops_con_uuid LIKE '%<nil>%' or ops_con_uuid = '' THEN null else ops_con_uuid
 END as ops_con_uuid,
 CASE 
-  WHEN ops_request_id LIKE '%<nil>%' THEN null else ops_request_id
+  WHEN ops_request_id LIKE '%<nil>%' or ops_request_id = '' THEN null else ops_request_id
 END as ops_request_id,
 CASE 
   WHEN custody_txn_id LIKE '%<nil>%' THEN null else custody_txn_id
@@ -85,8 +85,10 @@ CASE
   WHEN sender_uuid LIKE '%<nil>%' THEN null else sender_uuid
 END as sender_uuid,
 CASE 
-  WHEN receiver_uuid LIKE '%<nil>%' THEN null else receiver_uuid
-END as receiver_uuid,
+  WHEN receiver_uuid LIKE '%<nil>%' THEN null
+  WHEN lower(receiver_uuid) like '%destinationaddress%' then replace(replace(replace(lower(receiver_uuid),'\"',''),'destinationaddress:',''),',','')
+  else trim(receiver_uuid)
+ END as receiver_uuid,
 txn_type,
 CASE 
   WHEN credit_ccy LIKE '%<nil>%' THEN null else credit_ccy
@@ -113,8 +115,8 @@ substr(input_file_name, -28) as filename,
 """+jobRunMode+""" as jobRunMode
 FROM otc_transfers_raw
 """
-
 otc_transfers_raw = spark.sql(query).createOrReplaceTempView("otc_transfers_raw_TEMP")
+
 start_date, end_date, now_date = get_dates()
 query="""
 SELECT * FROM (
@@ -135,18 +137,5 @@ WHERE (CASE WHEN jobRunMode = 1 THEN (date_sub(p_date,1) = filename_DATE)
 otc_transfers_df = spark.sql(query)
 spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 otc_transfers_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/mob_otc/otc_transfers/")
-
-#data_dynamicframe = DynamicFrame.fromDF(otc_transfers_df.repartition(1), glueContext, "data_dynamicframe")
-
-
-# Script generated for node Amazon Redshift
-#AmazonRedshift_node4 = glueContext.write_dynamic_frame.from_catalog(
-#    frame=data_dynamicframe,
-#    database="spectrumdb_pdax_data_"+env+"",
-#    table_name="spectrumdb_pdax_data_"+env+"_otc_transfers_"+env+"",
-#    redshift_tmp_dir=args["TempDir"],
-#    transformation_ctx="AmazonRedshift_node4",
-#)
-
 
 job.commit()

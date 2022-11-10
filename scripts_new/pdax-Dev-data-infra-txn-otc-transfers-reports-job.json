@@ -23,7 +23,7 @@
     "--enable-continuous-cloudwatch-log" : "true",
     "--job-language" : "python",
     "--env" : "dev",
-    "--jobRunMode" : "0"
+    "--jobRunMode" : "1"
   },
   "connections" : {
     "connections" : [ "glue-to-redshift" ]
