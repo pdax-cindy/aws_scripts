@@ -91,21 +91,17 @@ txn_type,
 CASE 
   WHEN credit_ccy LIKE '%<nil>%' THEN null else credit_ccy
 END as credit_ccy,
-CASE 
-  WHEN credit_amount LIKE '%<nil>%' THEN null else credit_amount
-END as credit_amount,
-CASE 
-  WHEN credit_net_amount LIKE '%<nil>%' THEN null else credit_net_amount
-END as credit_net_amount,
+case when (credit_amount = null or credit_amount = '' or length(credit_amount) = 0 or credit_amount LIKE '%<nil>%') then 0 
+    else cast(credit_amount as decimal(19,6)) end as credit_amount,
+case when (credit_net_amount = null or credit_net_amount = '' or length(credit_net_amount) = 0 or credit_net_amount LIKE '%<nil>%') then 0 
+    else cast(credit_net_amount as decimal(19,6)) end as credit_net_amount,
 CASE 
   WHEN debit_ccy LIKE '%<nil>%' THEN null else debit_ccy
 END as debit_ccy,
-CASE 
-  WHEN debit_amount LIKE '%<nil>%' THEN null else debit_amount
-END as debit_amount,
-CASE 
-  WHEN debit_net_amount LIKE '%<nil>%' THEN null else debit_net_amount
-END as debit_net_amount,
+case when (debit_amount = null or debit_amount = '' or length(debit_amount) = 0 or debit_amount LIKE '%<nil>%') then 0 
+    else cast(debit_amount as decimal(19,6)) end as debit_amount,
+case when (debit_net_amount = null or debit_net_amount = '' or length(debit_net_amount) = 0 or debit_net_amount LIKE '%<nil>%') then 0 
+    else cast(debit_net_amount as decimal(19,6)) end as debit_net_amount,
 CASE 
   WHEN pdax_deposit_fee LIKE '%<nil>%' THEN null else pdax_deposit_fee
 END as pdax_deposit_fee,
