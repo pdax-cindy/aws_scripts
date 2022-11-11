@@ -1,0 +1,44 @@
+{
+  "name" : "pdax-Stage-data-infra-txn-master-trades-buy-and-sell-reports-job",
+  "description" : "",
+  "role" : "arn:aws:iam::467873314609:role/AWSGlueServiceRole-datateam-test_crawler-role",
+  "executionProperty" : {
+    "maxConcurrentRuns" : 1
+  },
+  "command" : {
+    "name" : "glueetl",
+    "scriptLocation" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/master-transaction-report/scripts_new/pdax-Stage-data-infra-txn-master-trades-buy-and-sell-reports-job.py",
+    "pythonVersion" : "3"
+  },
+  "defaultArguments" : {
+    "--class" : "GlueApp",
+    "--enable-metrics" : "true",
+    "--enable-spark-ui" : "true",
+    "--spark-event-logs-path" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/pdax-Stage-data-infra/master-transaction-stage/",
+    "--enable-job-insights" : "true",
+    "--stage" : "Stage",
+    "--enable-glue-datacatalog" : "true",
+    "--enable-continuous-cloudwatch-log" : "true",
+    "--job-bookmark-option" : "job-bookmark-disable",
+    "--job-language" : "python",
+    "--TempDir" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/master-transaction-report/TempDir/",
+    "--env" : "stage"
+  },
+  "connections" : {
+    "connections" : [ "glue-to-redshift" ]
+  },
+  "maxRetries" : 0,
+  "allocatedCapacity" : 10,
+  "timeout" : 2880,
+  "maxCapacity" : 10.0,
+  "glueVersion" : "3.0",
+  "numberOfWorkers" : 10,
+  "workerType" : "G.1X",
+  "executionClass" : "STANDARD",
+  "sourceControlDetails" : {
+    "provider" : "GITHUB",
+    "repository" : "aws_scripts",
+    "branch" : "stage",
+    "folder" : "scripts_new"
+  }
+}
