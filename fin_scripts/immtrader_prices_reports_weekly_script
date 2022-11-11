@@ -1,0 +1,129 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+from pyspark.sql.functions import input_file_name
+
+from awsglue.dynamicframe import DynamicFrame
+
+args = getResolvedOptions(sys.argv, ['JOB_NAME', 'stage', 'env','jobRunMode'])
+stage = args['stage']
+env = args['env']
+jobRunMode = args['jobRunMode']
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args["JOB_NAME"], args)
+
+# Script generated for node S3 bucket
+datasource0 = glueContext.create_dynamic_frame.from_options(
+    format_options={"quoteChar": '"', "withHeader": True, "separator": ","},
+    connection_type="s3",
+    format="csv",
+    connection_options={
+        "paths": ["s3://anxone-prod-ap-southeast-1/immtrader/prices/"],
+        "recurse": True,
+    },
+    transformation_ctx="S3bucket_node1",
+)
+
+dataframe1 = datasource0.toDF().withColumn("input_file_name", input_file_name()).createOrReplaceTempView("prices_raw")
+query = """
+with temp1 as (
+SELECT *,
+substr(filename,15,10) as p_date,
+substr(filename,15,4) as pxn_yr,
+substr(filename,20,2) as pxn_mo,
+substr(filename,23,2) as pxn_dy,
+substr(filename,26,2) as pxn_hr,
+substr(filename,28,2) as pxn_mm,
+substr(filename,30,2) as pxn_ss
+FROM (
+select *,
+"""+jobRunMode+""" as jobRunMode,
+substr(input_file_name, -35) as filename
+from prices_raw)a
+)
+
+SELECT *,
+      update_date_pst - INTERVAL 8 HOUR AS update_date_utc
+FROM (
+        SELECT *,
+            cast ( concat(p_date,' ',pxn_hr,':',pxn_mm,':',pxn_ss) as timestamp) as update_date_pst
+        FROM temp1
+        WHERE
+        (CASE WHEN jobRunMode = 1 THEN (p_date < date_sub(current_date, 7))
+             WHEN jobRunMode <> 1 THEN (p_date between date_sub(current_date, 7) and date_sub(current_date, 1))
+        END)
+    )
+
+"""
+
+prices_df = spark.sql(query).createOrReplaceTempView("prices_temp")
+
+query= """
+select
+cryptopair,
+tradedcurrency,
+settlementcurrency,
+`market maker` as market_maker,
+`imm best price-buy` as imm_best_price_buy,
+`imm best price-sell` as imm_best_price_sell,
+`coins.ph (fx)-buy` as coins_ph_fx_buy,
+`coins.ph (fx)-sell` as coins_ph_fx_sell,
+`coins.ph-buy` as coins_ph_buy,
+`coins.ph-sell` as coins_ph_sell,
+`bloomx-buy` as bloomx_buy,
+`bloomx-sell` as bloomx_sell,
+`pdax (fx)-buy` as pdax_fx_buy,
+`pdax (fx)-sell` as pdax_fx_sell,
+`cumberland-buy` as cumberland_buy,
+`cumberland-sell` as cumberland_sell,
+`ftx-buy` as ftx_buy,
+`ftx-sell` as ftx_sell,
+`whalefin-buy` as whalefin_buy,
+`whalefin-sell` as whalefin_sell,
+`falconx-buy` as falconx_buy,
+`falconx-sell` as falconx_sell,
+`b2c2-buy` as b2c2_buy,
+`b2c2-sell` as b2c2_sell,
+`wintermute-buy` as wintermute_buy,
+`wintermute-sell` as wintermute_sell,
+`best price-buy` as best_price_buy,
+`best price-sell` as best_price_sell,
+filename,
+update_date_pst,
+update_date_utc,
+p_date,
+pxn_yr,
+pxn_mo,
+pxn_dy,
+pxn_hr
+from prices_temp
+"""
+
+final_df = spark.sql(query)
+
+spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+final_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/immtrader/mm_prices/")
+
+data_dynamicframe = DynamicFrame.fromDF(final_df.repartition(1), glueContext, "data_dynamicframe")
+
+# Script generated for node Amazon Redshift
+AmazonRedshift_node4 = glueContext.write_dynamic_frame.from_catalog(
+    frame=data_dynamicframe,
+    database="pdax_data_infra_reports",
+    table_name="spectrumdb_pdax_data_"+env+"_mm_prices",
+    redshift_tmp_dir=args["TempDir"],
+    transformation_ctx="AmazonRedshift_node4",
+)
+
+
+job.commit()
+
+
+
+
