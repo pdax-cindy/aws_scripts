@@ -1,0 +1,45 @@
+{
+  "name" : "immtrader-prices-reports-hourly-job",
+  "description" : "",
+  "role" : "arn:aws:iam::467873314609:role/AWSGlueServiceRole-datateam-test_crawler-role",
+  "executionProperty" : {
+    "maxConcurrentRuns" : 1
+  },
+  "command" : {
+    "name" : "glueetl",
+    "scriptLocation" : "s3://pdax-data-dev-team-bucket-ap-southeast-1/fin_jobs/scripts/immtrader-prices-reports-hourly-job.py",
+    "pythonVersion" : "3"
+  },
+  "defaultArguments" : {
+    "--enable-glue-datacatalog" : "true",
+    "--job-bookmark-option" : "job-bookmark-disable",
+    "--TempDir" : "s3://pdax-data-dev-team-bucket-ap-southeast-1/pdax-Stage-data-infra/fin_jobs/TempDir",
+    "--class" : "GlueApp",
+    "--enable-spark-ui" : "true",
+    "--spark-event-logs-path" : "s3://pdax-data-dev-team-bucket-ap-southeast-1/pdax-Stage-data-infra/fin_jobs/",
+    "--enable-job-insights" : "true",
+    "--stage" : "Dev",
+    "--dateDelay" : "1",
+    "--enable-continuous-cloudwatch-log" : "true",
+    "--job-language" : "python",
+    "--env" : "dev",
+    "--jobRunMode" : "0"
+  },
+  "connections" : {
+    "connections" : [ "glue-to-redshift" ]
+  },
+  "maxRetries" : 0,
+  "allocatedCapacity" : 10,
+  "timeout" : 2880,
+  "maxCapacity" : 10.0,
+  "glueVersion" : "3.0",
+  "numberOfWorkers" : 10,
+  "workerType" : "G.1X",
+  "executionClass" : "STANDARD",
+  "sourceControlDetails" : {
+    "provider" : "GITHUB",
+    "repository" : "aws_scripts",
+    "branch" : "dev",
+    "folder" : "fin_scripts"
+  }
+}
