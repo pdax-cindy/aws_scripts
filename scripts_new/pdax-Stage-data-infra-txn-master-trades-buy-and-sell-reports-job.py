@@ -99,7 +99,7 @@ debit_ccy,
 tradeccy_amount,
 php_amount,
 transactiontype,
-fee,
+cast(fee as decimal(19,6)) as fee,
 channel,
 producttype,
 tradedccy,
@@ -162,10 +162,12 @@ username,
 cast(processeddatetime as timestamp) as transactiondatetime,
 ccy,
 cast(amount as decimal(19,6)) as amount,
-CASE WHEN ccy in ('PHP','PHPT') AND transactiontype = 'FILL_CREDIT' then 'buy'
-     WHEN ccy in ('PHP','PHPT') AND transactiontype = 'FILL_DEBIT' then 'sell'
+CASE WHEN ccy in ('PHP','PHPT') AND transactiontype = 'FILL_DEBIT' then 'buy'
+     WHEN ccy in ('PHP','PHPT') AND transactiontype = 'FILL_CREDIT' then 'sell'
+     WHEN ccy not in ('PHP','PHPT') AND transactiontype = 'FILL_CREDIT' then 'buy'
+     WHEN ccy not in ('PHP','PHPT') AND transactiontype = 'FILL_DEBIT' then 'sell'
 end as transactiontype,
-fee,
+cast(fee as decimal(19,6)) as fee,
 'osl' as channel,
 'Trade Buy/Sell' as producttype,
 concat(pxn_yr,'-',pxn_mo,'-',pxn_dy) as p_date,
@@ -192,14 +194,15 @@ tradeid,
 username,
 transactiondatetime,
 ccy as credit_ccy,
-amount as php_amount,
+amount as credit_amount,
 fee,
 transactiontype,
 channel,
 producttype,
 p_date
 from transactions_df
-WHERE ccy in ('PHP','PHPT')
+WHERE (ccy in ('PHP','PHPT') AND transactiontype = 'sell')
+OR (ccy not in ('PHP','PHPT') AND transactiontype = 'buy')
 """
 osl_credit = spark.sql(query).createOrReplaceTempView("osl_credit") 
 
@@ -210,14 +213,16 @@ tradeid,
 username,
 transactiondatetime,
 ccy as debit_ccy,
-amount as tradeccy_amount,
+amount as debit_amount,
 fee,
 transactiontype,
 channel,
 producttype,
 p_date
 from transactions_df
-WHERE ccy not in ('PHP','PHPT')"""
+WHERE (ccy in ('PHP','PHPT') AND transactiontype = 'buy')
+OR (ccy not in ('PHP','PHPT') AND transactiontype = 'sell')
+"""
 osl_debit = spark.sql(query).createOrReplaceTempView("osl_debit") 
 
 
@@ -232,13 +237,19 @@ a.username,
 a.transactiondatetime,
 a.credit_ccy,
 b.debit_ccy,
-b.tradeccy_amount,
-a.php_amount,
+CASE WHEN a.transactiontype = 'buy' AND a.credit_ccy not in ('PHP','PHPT') then a.credit_amount
+     WHEN a.transactiontype = 'sell' AND b.debit_ccy not in ('PHP','PHPT') then b.debit_amount
+end as tradeccy_amount,
+CASE WHEN a.transactiontype = 'sell' AND a.credit_ccy in ('PHP','PHPT') then a.credit_amount
+     WHEN a.transactiontype = 'buy' AND b.debit_ccy in ('PHP','PHPT') then b.debit_amount
+end as php_amount,
 a.transactiontype,
-a.fee,
+CASE WHEN a.transactiontype = 'sell' AND a.credit_ccy in ('PHP','PHPT') then a.fee
+     WHEN a.transactiontype = 'buy' AND b.debit_ccy in ('PHP','PHPT') then b.fee
+end as fee,
 a.channel,
 a.producttype,
-'' as tradedccy,
+CASE WHEN b.debit_ccy in ('PHPT','PHP') then a.credit_ccy else b.debit_ccy end as tradedccy,
 from_utc_timestamp('{}', 'Asia/Manila') as process_date_timestamp
 FROM
 osl_credit a

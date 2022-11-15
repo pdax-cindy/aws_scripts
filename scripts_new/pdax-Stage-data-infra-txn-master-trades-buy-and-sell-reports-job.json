@@ -11,18 +11,20 @@
     "pythonVersion" : "3"
   },
   "defaultArguments" : {
+    "--enable-glue-datacatalog" : "true",
+    "--job-bookmark-option" : "job-bookmark-disable",
+    "--TempDir" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/master-transaction-report/TempDir/",
     "--class" : "GlueApp",
     "--enable-metrics" : "true",
     "--enable-spark-ui" : "true",
     "--spark-event-logs-path" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/pdax-Stage-data-infra/master-transaction-stage/",
     "--enable-job-insights" : "true",
     "--stage" : "Stage",
-    "--enable-glue-datacatalog" : "true",
+    "--dateDelay" : "1",
     "--enable-continuous-cloudwatch-log" : "true",
-    "--job-bookmark-option" : "job-bookmark-disable",
     "--job-language" : "python",
-    "--TempDir" : "s3://pdax-data-stage-team-bucket-ap-southeast-1/master-transaction-report/TempDir/",
-    "--env" : "stage"
+    "--env" : "stage",
+    "--jobRunMode" : "0"
   },
   "connections" : {
     "connections" : [ "glue-to-redshift" ]
