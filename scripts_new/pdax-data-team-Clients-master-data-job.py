@@ -162,7 +162,7 @@ date_sub(current_date,"""+dateDelay+""") as date_delay,
 partition_0,
 partition_1,
 partition_2,
-concat(partition_0,'-',partition_1,'-',partition_0) as p_date
+concat(partition_0,'-',partition_1,'-',partition_2) as p_date
 FROM master_clients
 """
 
