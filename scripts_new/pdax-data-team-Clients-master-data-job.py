@@ -15,11 +15,21 @@ spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args["JOB_NAME"], args)
 pDate_filter = "partition_0 == year(date_sub(current_date, "+dateDelay+")) AND partition_1 == month(date_sub(current_date, "+dateDelay+")) AND partition_2 == day(date_sub(current_date, "+dateDelay+"))"
+S3bucket_country_node0 = glueContext.create_dynamic_frame.from_options(
+    format_options={"quoteChar": '"', "withHeader": True, "separator": ","},
+    connection_type="s3",
+    format="csv",
+    connection_options={
+        "paths": [
+            "s3://pdax-data-dev-trxn-pull-staging/manual_files/country_list/"
+        ],
+        "recurse": True,
+    },
+    transformation_ctx="S3bucket_country_node0",
+)
 
 # Script generated for node S3 bucket
 masterdata_source_node1 = glueContext.create_dynamic_frame.from_catalog(
-#    database="data_team_osl_db",
-#    table_name="osl_kyc_reports",
     push_down_predicate= pDate_filter,
     database="pdax_data_infra_reports",
     table_name="kyc_reports",
@@ -40,12 +50,14 @@ masterdata_mapping_node2 = ApplyMapping.apply(
         ("last_name", "string", "last_name", "string"),
         ("name_suffix", "string", "name_suffix", "string"),
         ("sex", "string", "sex", "string"),
+        ("country_code", "string", "country_code", "string"),
         ("contact_no", "string", "contact_no", "string"),
         ("birthdate", "string", "birthdate", "string"),
         ("birth_country", "string", "birth_country", "string"),
         ("birth_city", "string", "birth_city", "string"),
         ("nationality", "string", "nationality", "string"),
-        ("address", "string", "address", "string"),
+        ("address_line_1", "string", "address_line_1", "string"),
+        ("address_line_2", "string", "address_line_2", "string"),
         ("city", "string", "city", "string"),
         ("region", "string", "region", "string"),
         ("country", "string", "country", "string"),
@@ -61,20 +73,18 @@ masterdata_mapping_node2 = ApplyMapping.apply(
         ("status_updated_at", "string", "status_updated_at", "string"),
         ("created_at", "string", "created_at", "string"),
         ("updated_at", "string", "updated_at", "string"),
-        ("country_code", "string", "country_code", "string"),
-        ("address_line_1", "string", "address_line_1", "string"),
-        ("address_line_2", "string", "address_line_2", "string"),
+        ("address", "string", "address", "string"),
         ("partition_0", "string", "partition_0", "string"),
         ("partition_1", "string", "partition_1", "string"),
         ("partition_2", "string", "partition_2", "string"),
     ],
     transformation_ctx="masterdata_mapping_node2",
 )
+S3bucket_country_node0.toDF().createOrReplaceTempView("country_code_2022")
 masterdata_mapping_node2.toDF().createOrReplaceTempView("master_clients")
-
 query = """
 SELECT
-email,
+lower(email) as email,
 user_id,
 guid,
 tier,
@@ -88,82 +98,161 @@ CASE
     WHEN UPPER(sex) LIKE ('M%') THEN 'Male' else null
 END AS sex,
 CASE
-    WHEN UPPER(contact_no) LIKE 'PH%' THEN '+63' 
-    ELSE contact_no 
+    WHEN UPPER(country_code) LIKE 'PH%' THEN '63' 
+    ELSE country_code 
 END AS country_code,
 CASE 
-    WHEN contact_no = '+63' and (birthdate like '63%' AND length(birthdate) < 10) THEN replace(birthdate,'63','')
-    WHEN contact_no = '+63' and (length(birthdate) < 10 and birthdate like '+%') THEN replace(replace(birthdate,'+63',''),'+','')
-    WHEN contact_no = '+63' THEN substr(birthdate,-10)
-    WHEN contact_no LIKE 'PH%' THEN substr(birthdate,-10)
-    WHEN contact_no != '+63' and length(birthdate) < 10 THEN birthdate
-    WHEN contact_no in ('+998','+974','+852') and length(birthdate) > 10 THEN substr(birthdate,4)
-    ELSE birthdate 
-END AS contact_number,
+    WHEN country_code = '+63' and (contact_no like '63%' AND length(contact_no) < 10) THEN replace(contact_no,'63','')
+    WHEN country_code = '+63' and (length(contact_no) < 10 and contact_no like '+%') THEN replace(replace(contact_no,'+63',''),'+','')
+    WHEN country_code = '+63' THEN substr(contact_no,-10)
+    WHEN country_code LIKE 'PH%' THEN substr(contact_no,-10)
+    WHEN country_code != '+63' and length(contact_no) < 10 THEN contact_no
+    WHEN country_code in ('+998','+974','+852') and length(contact_no) > 10 THEN substr(contact_no,4)
+    ELSE contact_no 
+END AS contact_no,
 CASE
-    WHEN (birth_country = '-' or UPPER(birth_country) = 'INVALID DATE' or birth_country = '0' or birth_country = '') THEN null
-    WHEN length(birth_country) = 10 THEN date_format(to_date(birth_country, 'yyyy-MM-dd'),'yyyy-MM-dd')
-    WHEN length(birth_country) = 23 THEN date_format(to_date(birth_country, 'yyyy-MM-dd HH:mm:ss.SSS'),'yyyy-MM-dd')
-    WHEN length(birth_country) = 9 THEN date_format(to_date(concat('1',birth_country), 'yyyy-MM-dd'),'yyyy-MM-dd')
-    WHEN length(birth_country) = 8 THEN date_format(to_date(birth_country, 'yy-MM-dd'),'yyyy-MM-dd')
-    WHEN length(birth_country) = 7 THEN date_format(to_date(birth_country, 'M-yy-dd'),'yyyy-MM-dd')
+    WHEN (birthdate = '-' or UPPER(birthdate) = 'INVALID DATE' or birthdate = '0' or birthdate = '') THEN null
+    WHEN length(birthdate) = 10 THEN date_format(to_date(birthdate, 'yyyy-MM-dd'),'yyyy-MM-dd')
+    WHEN length(birthdate) = 23 THEN date_format(to_date(birthdate, 'yyyy-MM-dd HH:mm:ss.SSS'),'yyyy-MM-dd')
+    WHEN length(birthdate) = 9 THEN date_format(to_date(concat('1',birthdate), 'yyyy-MM-dd'),'yyyy-MM-dd')
+    WHEN length(birthdate) = 8 THEN date_format(to_date(birthdate, 'yy-MM-dd'),'yyyy-MM-dd')
+    WHEN length(birthdate) = 7 THEN date_format(to_date(birthdate, 'M-yy-dd'),'yyyy-MM-dd')
     ELSE null
 END AS birthdate,
-UPPER(birth_city) as birth_country,
-regexp_replace(regexp_replace(UPPER(nationality),'[.,+/#!$%^&*;:{}=_`~()-\]',''),'[0-9]','') as birth_city,
+UPPER(birth_country) as birth_country,
+regexp_replace(regexp_replace(UPPER(birth_city),'[.,+/#!$%^&*;:{}=_`~()-\]',''),'[0-9]','') as birth_city,
 CASE 
-   WHEN UPPER(address) LIKE 'FILIPINO %' AND UPPER(address) != ('FILIPINO CITIZEN') THEN 'FILIPINO (DUAL)'
-   WHEN upper(income_source) like 'PH%' AND (UPPER(address) IN ('F','FI','FILIPINO CITIZEN','PINOY','PL','ASIAN','MANILA','BISAYA','NCR')
-    OR (UPPER(address) LIKE '%CITY%' OR UPPER(address) LIKE 'NATION%' OR UPPER(address) LIKE '%TAGALOG%')) THEN 'FILIPINO'
-   WHEN (UPPER(address) LIKE 'FH%'
-      or UPPER(address) LIKE 'PH%' 
-      or UPPER(address) LIKE 'F%INO'
-      or UPPER(address) LIKE 'F%NO'
-      or UPPER(address) LIKE 'P%INO'
-      or UPPER(address) LIKE '%LIPI%'
-      or UPPER(address) LIKE 'FIL%'
-      or UPPER(address) LIKE 'PIL%'
-      or UPPER(address) LIKE '%PPINES'
+   WHEN UPPER(nationality) LIKE 'FILIPINO %' AND UPPER(nationality) != ('FILIPINO CITIZEN') THEN 'FILIPINO (DUAL)'
+   WHEN upper(income_source) like 'PH%' AND (UPPER(nationality) IN ('F','FI','FILIPINO CITIZEN','PINOY','PL','ASIAN','MANILA','BISAYA','NCR')
+    OR (UPPER(nationality) LIKE '%CITY%' OR UPPER(nationality) LIKE 'NATION%' OR UPPER(nationality) LIKE '%TAGALOG%')) THEN 'FILIPINO'
+   WHEN (UPPER(nationality) LIKE 'FH%'
+      or UPPER(nationality) LIKE 'PH%' 
+      or UPPER(nationality) LIKE 'F%INO'
+      or UPPER(nationality) LIKE 'F%NO'
+      or UPPER(nationality) LIKE 'P%INO'
+      or UPPER(nationality) LIKE '%LIPI%'
+      or UPPER(nationality) LIKE 'FIL%'
+      or UPPER(nationality) LIKE 'PIL%'
+      or UPPER(nationality) LIKE '%PPINES'
       ) THEN 'FILIPINO'
- WHEN UPPER(income_source) like 'PH%' AND length(address) != 0 THEN 'N/A'
-    ELSE regexp_replace(regexp_replace(UPPER(address),'[.,+/#!$%^&*;:{}=_`~()-\]',''),'[0-9]','') 
+ WHEN UPPER(country) like 'PH%' AND length(nationality) != 0 THEN 'N/A'
+    ELSE regexp_replace(regexp_replace(UPPER(nationality),'[.,+/#!$%^&*;:{}=_`~()-\]',''),'[0-9]','') 
 END AS nationality,
-city as address,
-region as address_line_1,
-country	as address_line_2,
-REPLACE(regexp_replace(UPPER(zipcode),'[.,+/#!$%^&*;:{}=_`~()-]',''),'\','') as region,
-CASE 
-    WHEN upper(income_source) in ('-','MOBILE COUNTRY CODE') then null
-    WHEN upper(income_source) like 'PH%' then 'PH'
-    ELSE upper(income_source) 
+address_line_1,
+address_line_2,
+city,
+REPLACE(regexp_replace(UPPER(region),'[.,+/#!$%^&*;:{}=_`~()-]',''),'\','') as region,
+CASE WHEN upper(c1.country) = c2.country_name THEN upper(c1.country)
+     WHEN upper(c1.country) = c2.alpha_2_code THEN c2.country_name
+     WHEN upper(c1.country) = c2.alpha_3_code THEN c2.country_name
+     WHEN upper(c1.country) in ('-','MOBILE COUNTRY CODE') THEN '-'
+     ELSE upper(c1.country)
 END AS country,
+CASE WHEN upper(c1.country) = c2.country_name THEN c2.alpha_2_code
+     WHEN upper(c1.country) = c2.alpha_2_code THEN c2.alpha_2_code
+     WHEN upper(c1.country) = c2.alpha_3_code THEN c2.alpha_2_code
+     WHEN upper(c1.country) in ('-','MOBILE COUNTRY CODE') THEN '-'
+     WHEN upper(c1.country) = 'PHILIPPINES (THE)' THEN 'PH'
+     WHEN upper(c1.country) = 'KOREA (THE REPUBLIC OF)' THEN 'KR'
+     WHEN upper(c1.country) = 'VIET NAM' THEN 'VN'
+     WHEN upper(c1.country) = 'UNITED ARAB EMIRATES (THE)' THEN 'AE'
+     WHEN upper(c1.country) = 'UNITED STATES OF AMERICA (THE)' THEN 'US'
+     END as iso_country_code,
 CASE
-    WHEN UPPER(TRIM(submitted_id)) IN
+    WHEN UPPER(TRIM(zipcode)) IN
         ('NONE','NOT APPLICABLE','N/A','NA','NILL','NO ZIP CODE','OOOO','1','O','X','0','00','000','0000','DELETED')
-        OR UPPER(TRIM(submitted_id)) LIKE '%00000%' THEN 'N/A'
-    WHEN upper(income_source) LIKE 'PH%' AND LENGTH(TRIM(submitted_id)) >= 10 THEN 'N/A'
-    WHEN upper(income_source) LIKE 'PH%' THEN 
-        TRIM(replace(replace(REGEXP_REPLACE(REGEXP_REPLACE(submitted_id,'[a-zA-Z]+',''),'[._,()/# ]+',''),'-',''),'+63',''))
-    WHEN upper(income_source) NOT LIKE 'PH%' AND UPPER(TRIM(submitted_id)) LIKE '+%' THEN 'N/A'
-    ELSE TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(submitted_id),'[._,()/ ]+',''),'SELECT',''),'-',''),'POBOX',''),'RIYADH',''),'000000',''))
+        OR UPPER(TRIM(zipcode)) LIKE '%00000%' THEN 'N/A'
+    WHEN upper(country) LIKE 'PH%' AND LENGTH(TRIM(zipcode)) >= 10 THEN 'N/A'
+    WHEN upper(country) LIKE 'PH%' THEN 
+        TRIM(replace(replace(REGEXP_REPLACE(REGEXP_REPLACE(zipcode,'[a-zA-Z]+',''),'[._,()/# ]+',''),'-',''),'+63',''))
+    WHEN upper(country) NOT LIKE 'PH%' AND UPPER(TRIM(zipcode)) LIKE '+%' THEN 'N/A'
+    ELSE TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(zipcode),'[._,()/ ]+',''),'SELECT',''),'-',''),'POBOX',''),'RIYADH',''),'000000',''))
 END as zipcode,
-application_id as income_source,
-verification_id	as submitted_id,
-status as application_id,
-error as verification_id,
-verified_by as status,
-email_template_sent as	error,
-status_updated_at as verified_by,
-created_at as email_template_sent,
-updated_at as status_updated_at,
-country_code as created_at,
-address_line_1 as updated_at,
+income_source,
+COUNT(income_source) OVER (PARTITION BY income_source) AS cnt1,
+submitted_id,
+application_id,
+verification_id,
+status,
+error,
+verified_by,
+email_template_sent,
+status_updated_at,
+created_at,
+updated_at,
 date_sub(current_date,"""+dateDelay+""") as date_delay,
 partition_0,
 partition_1,
 partition_2,
 concat(partition_0,'-',partition_1,'-',partition_2) as p_date
-FROM master_clients
+FROM master_clients c1
+LEFT JOIN country_code_2022 c2
+ON (upper(c1.country) = c2.country_name
+OR upper(c1.country) = c2.alpha_2_code
+OR upper(c1.country) = c2.alpha_3_code)
+"""
+masters_temp = spark.sql(query).createOrReplaceTempView("master_clients_temp")
+
+query="""
+SELECT
+email,
+user_id,
+guid,
+tier,
+verification_state,
+first_name,
+middle_name,
+last_name,
+name_suffix,
+sex,
+country_code,
+contact_no,
+birthdate,
+birth_country,
+birth_city,
+nationality,
+address_line_1,
+address_line_2,
+city,
+region,
+country,
+iso_country_code,
+zipcode,
+CASE 
+WHEN (income_source LIKE '%EMPLOY%' OR income_source LIKE 'ACCOUNT%' or income_source LIKE 'ADMIN%')
+or income_source LIKE 'WORK%' OR income_source LIKE 'BPO%' OR income_source LIKE 'CALL%' OR income_source LIKE 'COMPANY%'
+or income_source IN ('JOB','WORK','WORKING','BPO','WORKER','COMPANY','CLERK') THEN 'EMPLOYED'
+WHEN income_source LIKE '%ONLINE%' THEN 'OTHERS ONLINE SELLING'
+WHEN income_source LIKE '%PROFESSION%' or income_source ='HOMEBASED' OR income_source LIKE '%SELF EMPLOYED'
+OR income_source LIKE '%TECH%' OR income_source LIKE 'SELLING%' OR income_source LIKE '%FREELAN%' THEN 'SELF-EMPLOYED'
+WHEN (income_source LIKE '%ALLOW%' OR income_source IN('ALLAWANCE','ALOWANCE','ALLAWONCE','ALLLOWANCE') ) THEN 'ALLOWANCE'
+WHEN (income_source LIKE '%CRYPTO%' or income_source LIKE '%AXIE%' OR income_source LIKE '%COIN%' OR income_source LIKE 'CRYT%'
+OR income_source LIKE '%NFT%' or income_source LIKE '%BINANCE%' or income_source LIKE '%BITC%' or income_source LIKE 'BLOCK%') 
+OR income_source IN ('CRIPTO','CRPYTO','CRYTO')
+THEN 'CRYPTO TRADING AND INVESTMENTS'
+WHEN income_source LIKE '% SALARY' THEN 'OTHERS SALARY'
+WHEN income_source LIKE '%AGRI%' THEN 'AGRICULTURE'
+WHEN income_source LIKE '%BUSINESS%' THEN 'BUSINESS INCOME'
+WHEN (income_source LIKE '%BUY%' AND income_source LIKE '%SELL%') THEN 'OTHERS BUY AND SELL'
+WHEN income_source LIKE '%-RENT' or income_source like '%RENTAL' or income_source LIKE '%HOUSE RENTAL%' OR
+income_source in ('RENT HOUSE','RENTA','RENTALS','HOUSE UNIT RENTAL','RENTAL OF RESIDENTIAL UNITS','RESIDENTIAL RENTAL')
+THEN 'INCOME FROM RENTS'
+WHEN cnt1 = 1 THEN 'OTHER SOURCES'
+WHEN income_source like '%00' or income_source ='-' or (cnt1 <= 3 AND LENGTH(income_source) <= 3) THEN 'OTHER SOURCES'
+ELSE income_source
+END AS income_source,
+submitted_id,
+application_id,
+verification_id,
+status,
+error,
+verified_by,
+email_template_sent,
+status_updated_at,
+created_at,
+updated_at,
+p_date
+FROM master_clients_temp
 """
 
 final_df = spark.sql(query)
