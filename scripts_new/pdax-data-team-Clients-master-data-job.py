@@ -83,6 +83,10 @@ masterdata_mapping_node2 = ApplyMapping.apply(
 S3bucket_country_node0.toDF().createOrReplaceTempView("country_code_2022")
 masterdata_mapping_node2.toDF().createOrReplaceTempView("master_clients")
 query = """
+SELECT *,
+RANK() OVER (PARTITION BY email ORDER BY created_at desc) rnk1,
+RANK() OVER (PARTITION BY email ORDER BY updated_at desc) rnk2
+FROM (
 SELECT
 lower(email) as email,
 user_id,
@@ -119,7 +123,12 @@ CASE
     WHEN length(birthdate) = 7 THEN date_format(to_date(birthdate, 'M-yy-dd'),'yyyy-MM-dd')
     ELSE null
 END AS birthdate,
-UPPER(birth_country) as birth_country,
+CASE WHEN upper(c1.birth_country) like 'PH%' THEN 'PH'
+     WHEN upper(c1.birth_country) = c3.country_name then c3.alpha_2_code
+     WHEN upper(c1.birth_country) IN ('SOUTH KOREA','KOREA SOUTH') THEN 'KR'
+     WHEN upper(c1.birth_country) = 'UNITED STATES' THEN 'US'
+     ELSE upper(c1.birth_country) 
+END AS birth_country,
 regexp_replace(regexp_replace(UPPER(birth_city),'[.,+/#!$%^&*;:{}=_`~()-\]',''),'[0-9]','') as birth_city,
 CASE 
    WHEN UPPER(nationality) LIKE 'FILIPINO %' AND UPPER(nationality) != ('FILIPINO CITIZEN') THEN 'FILIPINO (DUAL)'
@@ -142,22 +151,22 @@ address_line_1,
 address_line_2,
 city,
 REPLACE(regexp_replace(UPPER(region),'[.,+/#!$%^&*;:{}=_`~()-]',''),'\','') as region,
-CASE WHEN upper(c1.country) = c2.country_name THEN upper(c1.country)
+CASE WHEN upper(c1.country) like 'PH%' THEN 'PHILIPPINES'
+     WHEN upper(c1.country) = c2.country_name THEN upper(c1.country)
      WHEN upper(c1.country) = c2.alpha_2_code THEN c2.country_name
      WHEN upper(c1.country) = c2.alpha_3_code THEN c2.country_name
      WHEN upper(c1.country) in ('-','MOBILE COUNTRY CODE') THEN '-'
      ELSE upper(c1.country)
 END AS country,
-CASE WHEN upper(c1.country) = c2.country_name THEN c2.alpha_2_code
+CASE WHEN upper(c1.country) like 'PH%' THEN 'PH'
+     WHEN upper(c1.country) = c2.country_name THEN c2.alpha_2_code
      WHEN upper(c1.country) = c2.alpha_2_code THEN c2.alpha_2_code
      WHEN upper(c1.country) = c2.alpha_3_code THEN c2.alpha_2_code
      WHEN upper(c1.country) in ('-','MOBILE COUNTRY CODE') THEN '-'
-     WHEN upper(c1.country) = 'PHILIPPINES (THE)' THEN 'PH'
-     WHEN upper(c1.country) = 'KOREA (THE REPUBLIC OF)' THEN 'KR'
-     WHEN upper(c1.country) = 'VIET NAM' THEN 'VN'
-     WHEN upper(c1.country) = 'UNITED ARAB EMIRATES (THE)' THEN 'AE'
-     WHEN upper(c1.country) = 'UNITED STATES OF AMERICA (THE)' THEN 'US'
-     END as iso_country_code,
+     WHEN upper(c1.country) IN ('SOUTH KOREA','KOREA SOUTH') THEN 'KR'
+     WHEN upper(c1.country) = 'UNITED STATES' THEN 'US'
+ELSE upper(c1.country)
+END as iso_country_code,
 CASE
     WHEN UPPER(TRIM(zipcode)) IN
         ('NONE','NOT APPLICABLE','N/A','NA','NILL','NO ZIP CODE','OOOO','1','O','X','0','00','000','0000','DELETED')
@@ -168,8 +177,7 @@ CASE
     WHEN upper(country) NOT LIKE 'PH%' AND UPPER(TRIM(zipcode)) LIKE '+%' THEN 'N/A'
     ELSE TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(zipcode),'[._,()/ ]+',''),'SELECT',''),'-',''),'POBOX',''),'RIYADH',''),'000000',''))
 END as zipcode,
-income_source,
-COUNT(income_source) OVER (PARTITION BY income_source) AS cnt1,
+upper(income_source) as income_source,
 submitted_id,
 application_id,
 verification_id,
@@ -178,18 +186,20 @@ error,
 verified_by,
 email_template_sent,
 status_updated_at,
-created_at,
-updated_at,
+cast(created_at  as timestamp) as created_at,
+cast(updated_at as timestamp) as updated_at,
 date_sub(current_date,"""+dateDelay+""") as date_delay,
-partition_0,
-partition_1,
-partition_2,
-concat(partition_0,'-',partition_1,'-',partition_2) as p_date
+concat(partition_0,'-',partition_1,'-',partition_2) as p_date,
+COUNT(upper(income_source)) OVER (PARTITION BY upper(income_source)) AS cnt1,
+cast(date_sub(current_date,("""+dateDelay+""" + 1)) as timestamp) as date_delay2
 FROM master_clients c1
 LEFT JOIN country_code_2022 c2
 ON (upper(c1.country) = c2.country_name
 OR upper(c1.country) = c2.alpha_2_code
 OR upper(c1.country) = c2.alpha_3_code)
+left join country_code_2022 c3
+ON upper(c1.birth_country) = c3.country_name
+OR upper(c1.birth_country) = c3.alpha_2_code)
 """
 masters_temp = spark.sql(query).createOrReplaceTempView("master_clients_temp")
 
@@ -249,10 +259,11 @@ error,
 verified_by,
 email_template_sent,
 status_updated_at,
-created_at,
+CASE WHEN created_at is NULL THEN date_delay2 ELSE created_at END AS created_at,
 updated_at,
 p_date
 FROM master_clients_temp
+WHERE rnk1 = 1 and rnk2 = 1
 """
 
 final_df = spark.sql(query)

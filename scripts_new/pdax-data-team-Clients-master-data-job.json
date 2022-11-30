@@ -20,7 +20,7 @@
     "--spark-event-logs-path" : "s3://aws-glue-assets-467873314609-ap-southeast-1/sparkHistoryLogs/",
     "--enable-job-insights" : "true",
     "--stage" : "Dev",
-    "--dateDelay" : "1",
+    "--dateDelay" : "0",
     "--enable-continuous-cloudwatch-log" : "true",
     "--job-language" : "python",
     "--env" : "dev",
