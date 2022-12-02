@@ -291,10 +291,9 @@ create table pdax_data_dev.master_clients_kyc_data_temp_stg as select * from pda
 post_query = """begin;
 delete from pdax_data_dev.master_clients_kyc_data_temp using pdax_data_dev.master_clients_kyc_data_temp_stg
 where pdax_data_dev.master_clients_kyc_data_temp_stg.email = pdax_data_dev.master_clients_kyc_data_temp.email 
-and pdax_data_dev.master_clients_kyc_data_temp_stg.updated_at != pdax_data_dev.master_clients_kyc_data_temp.updated_at;
+and pdax_data_dev.master_clients_kyc_data_temp_stg.updated_at = pdax_data_dev.master_clients_kyc_data_temp.updated_at;
 
 insert into pdax_data_dev.master_clients_kyc_data_temp select * from pdax_data_dev.master_clients_kyc_data_temp_stg;
-
 drop table pdax_data_dev.master_clients_kyc_data_temp_stg; 
 end;"""
 
