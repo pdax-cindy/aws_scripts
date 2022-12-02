@@ -187,7 +187,7 @@ verified_by,
 email_template_sent,
 status_updated_at,
 cast(created_at  as timestamp) as created_at,
-cast(updated_at as timestamp) as updated_at,
+updated_at,
 date_sub(current_date,"""+dateDelay+""") as date_delay,
 concat(partition_0,'-',partition_1,'-',partition_2) as p_date,
 COUNT(upper(income_source)) OVER (PARTITION BY upper(income_source)) AS cnt1,
@@ -201,6 +201,7 @@ left join country_code_2022 c3
 ON upper(c1.birth_country) = c3.country_name
 OR upper(c1.birth_country) = c3.alpha_2_code)
 """
+#cast(updated_at as timestamp) as updated_at,
 masters_temp = spark.sql(query).createOrReplaceTempView("master_clients_temp")
 
 query="""
@@ -266,8 +267,10 @@ FROM master_clients_temp
 WHERE rnk1 = 1 and rnk2 = 1
 """
 
+#CASE WHEN created_at is NULL THEN date_delay2 ELSE created_at END AS 
+
 final_df = spark.sql(query)
-#data_dynamicframe = DynamicFrame.fromDF(final_df.repartition(1), glueContext, "data_dynamicframe")
+data_dynamicframe = DynamicFrame.fromDF(final_df.repartition(1), glueContext, "data_dynamicframe")
 #data_dynamicframe.show()
 
 #AmazonRedshift_node5 = glueContext.write_dynamic_frame.from_catalog(
@@ -279,6 +282,34 @@ final_df = spark.sql(query)
 #)
 
 spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-final_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/master_data_kyc_dev/")
+final_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/master_data_kyc_dev_temp/")
+
+# Script generated for node Amazon Redshift
+pre_query = """drop table if exists pdax_data_dev.master_clients_kyc_data_temp_stg;
+create table pdax_data_dev.master_clients_kyc_data_temp_stg as select * from pdax_data_dev.master_clients_kyc_data_temp where 1=2;"""
+
+post_query = """begin;
+delete from pdax_data_dev.master_clients_kyc_data_temp using pdax_data_dev.master_clients_kyc_data_temp_stg
+where pdax_data_dev.master_clients_kyc_data_temp_stg.email = pdax_data_dev.master_clients_kyc_data_temp.email 
+and pdax_data_dev.master_clients_kyc_data_temp_stg.updated_at != pdax_data_dev.master_clients_kyc_data_temp.updated_at;
+
+insert into pdax_data_dev.master_clients_kyc_data_temp select * from pdax_data_dev.master_clients_kyc_data_temp_stg;
+
+drop table pdax_data_dev.master_clients_kyc_data_temp_stg; 
+end;"""
+
+
+AmazonRedshift_redshift_load_node5 = glueContext.write_dynamic_frame.from_jdbc_conf(
+    frame=data_dynamicframe,
+    catalog_connection="glue-to-redshift",
+    connection_options={
+        "database": "spectrumdb",
+        "dbtable": "pdax_data_dev.master_clients_kyc_data_temp_stg",
+        "preactions": pre_query,
+        "postactions": post_query,
+    },
+    redshift_tmp_dir=args["TempDir"],
+    transformation_ctx="AmazonRedshift_redshift_load_node5",
+)
 
 job.commit()

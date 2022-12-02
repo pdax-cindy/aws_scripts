@@ -20,7 +20,7 @@
     "--spark-event-logs-path" : "s3://aws-glue-assets-467873314609-ap-southeast-1/sparkHistoryLogs/",
     "--enable-job-insights" : "true",
     "--stage" : "Dev",
-    "--dateDelay" : "0",
+    "--dateDelay" : "1",
     "--enable-continuous-cloudwatch-log" : "true",
     "--job-language" : "python",
     "--env" : "dev",
@@ -36,7 +36,7 @@
   "glueVersion" : "3.0",
   "numberOfWorkers" : 10,
   "workerType" : "G.1X",
-  "executionClass" : "STANDARD",
+  "executionClass" : "FLEX",
   "sourceControlDetails" : {
     "provider" : "GITHUB",
     "repository" : "aws_scripts",
