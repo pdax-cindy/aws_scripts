@@ -5,6 +5,7 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.dynamicframe import DynamicFrame
+from pyspark.sql.functions import *
 
 args = getResolvedOptions(sys.argv, ['JOB_NAME', 'env','dateDelay'])
 env = args['env']
@@ -26,6 +27,18 @@ S3bucket_country_node0 = glueContext.create_dynamic_frame.from_options(
         "recurse": True,
     },
     transformation_ctx="S3bucket_country_node0",
+)
+
+# Script generated for node S3 bucket
+S3bucket_prime_user_node0 = glueContext.create_dynamic_frame.from_options(
+    format_options={"quoteChar": '"', "withHeader": True, "separator": ","},
+    connection_type="s3",
+    format="csv",
+    connection_options={
+        "paths": ["s3://pdax-data-dev-trxn-pull-staging/manual_files/pdax_prime_user/"],
+        "recurse": True,
+    },
+    transformation_ctx="S3bucket_prime_user_node0",
 )
 
 # Script generated for node S3 bucket
@@ -82,8 +95,19 @@ masterdata_mapping_node2 = ApplyMapping.apply(
 )
 S3bucket_country_node0.toDF().createOrReplaceTempView("country_code_2022")
 masterdata_mapping_node2.toDF().createOrReplaceTempView("master_clients")
+S3bucket_prime_user_node0.toDF().createOrReplaceTempView("prime_users")
 query = """
-SELECT *,
+SELECT email,user_id,guid,
+case when clients.email = lower(prime.username) then prime.user_tier else clients.tier end as tier,
+prime.sub_group,prime.javi_clients,
+verification_state,first_name,middle_name,last_name,name_suffix,sex,country_code,
+case when clients.email = lower(prime.username) then replace(prime.contact_number,' ','') else clients.contact_no end as contact_no,
+birthdate,birth_country,birth_city,nationality,region,address_line_1,
+address_line_2,city,country,iso_country_code,zipcode,income_source,
+submitted_id,application_id,verification_id,status,error,verified_by,
+email_template_sent,status_updated_at,created_at,updated_at,
+date_delay,p_date,cnt1, date_delay2,
+CAST(CURRENT_TIMESTAMP() as timestamp) as curr_timestamp,
 RANK() OVER (PARTITION BY email ORDER BY created_at desc) rnk1,
 RANK() OVER (PARTITION BY email ORDER BY updated_at desc) rnk2
 FROM (
@@ -199,7 +223,9 @@ OR upper(c1.country) = c2.alpha_2_code
 OR upper(c1.country) = c2.alpha_3_code)
 left join country_code_2022 c3
 ON upper(c1.birth_country) = c3.country_name
-OR upper(c1.birth_country) = c3.alpha_2_code)
+OR upper(c1.birth_country) = c3.alpha_2_code) clients
+LEFT JOIN prime_users prime 
+ON clients.email = lower(prime.username)
 """
 #cast(updated_at as timestamp) as updated_at,
 masters_temp = spark.sql(query).createOrReplaceTempView("master_clients_temp")
@@ -210,6 +236,8 @@ email,
 user_id,
 guid,
 tier,
+sub_group,
+javi_clients,
 verification_state,
 first_name,
 middle_name,
@@ -262,6 +290,7 @@ email_template_sent,
 status_updated_at,
 CASE WHEN created_at is NULL THEN date_delay2 ELSE created_at END AS created_at,
 updated_at,
+curr_timestamp + INTERVAL 8 HOUR AS processdatetimestamp,
 p_date
 FROM master_clients_temp
 WHERE rnk1 = 1 and rnk2 = 1
@@ -281,20 +310,24 @@ data_dynamicframe = DynamicFrame.fromDF(final_df.repartition(1), glueContext, "d
 #    transformation_ctx="AmazonRedshift_node5",
 #)
 
-spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-final_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/master_data_kyc_dev_temp/")
+#spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+#final_df.repartition(1).write.partitionBy("p_date").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/master_data_kyc_dev/")
 
 # Script generated for node Amazon Redshift
-pre_query = """drop table if exists pdax_data_dev.master_clients_kyc_data_temp_stg;
-create table pdax_data_dev.master_clients_kyc_data_temp_stg as select * from pdax_data_dev.master_clients_kyc_data_temp where 1=2;"""
+pre_query = """drop table if exists pdax_data_dev.master_clients_kyc_data_stg;
+create table pdax_data_dev.master_clients_kyc_data_stg as select * from pdax_data_dev.master_clients_kyc_data where 1=2;"""
 
 post_query = """begin;
-delete from pdax_data_dev.master_clients_kyc_data_temp using pdax_data_dev.master_clients_kyc_data_temp_stg
-where pdax_data_dev.master_clients_kyc_data_temp_stg.email = pdax_data_dev.master_clients_kyc_data_temp.email 
-and pdax_data_dev.master_clients_kyc_data_temp_stg.updated_at = pdax_data_dev.master_clients_kyc_data_temp.updated_at;
+delete from pdax_data_dev.master_clients_kyc_data using pdax_data_dev.master_clients_kyc_data_stg
+where pdax_data_dev.master_clients_kyc_data_stg.email = pdax_data_dev.master_clients_kyc_data.email 
+and pdax_data_dev.master_clients_kyc_data_stg.updated_at != pdax_data_dev.master_clients_kyc_data.updated_at;
 
-insert into pdax_data_dev.master_clients_kyc_data_temp select * from pdax_data_dev.master_clients_kyc_data_temp_stg;
-drop table pdax_data_dev.master_clients_kyc_data_temp_stg; 
+delete from pdax_data_dev.master_clients_kyc_data_stg using pdax_data_dev.master_clients_kyc_data
+where pdax_data_dev.master_clients_kyc_data.email = pdax_data_dev.master_clients_kyc_data_stg.email 
+and pdax_data_dev.master_clients_kyc_data.updated_at = pdax_data_dev.master_clients_kyc_data_stg.updated_at;
+
+insert into pdax_data_dev.master_clients_kyc_data select * from pdax_data_dev.master_clients_kyc_data_stg;
+drop table pdax_data_dev.master_clients_kyc_data_stg; 
 end;"""
 
 
@@ -303,12 +336,13 @@ AmazonRedshift_redshift_load_node5 = glueContext.write_dynamic_frame.from_jdbc_c
     catalog_connection="glue-to-redshift",
     connection_options={
         "database": "spectrumdb",
-        "dbtable": "pdax_data_dev.master_clients_kyc_data_temp_stg",
+        "dbtable": "pdax_data_dev.master_clients_kyc_data_stg",
         "preactions": pre_query,
         "postactions": post_query,
     },
     redshift_tmp_dir=args["TempDir"],
     transformation_ctx="AmazonRedshift_redshift_load_node5",
 )
+
 
 job.commit()
