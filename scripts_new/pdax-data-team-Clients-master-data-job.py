@@ -35,7 +35,7 @@ S3bucket_prime_user_node0 = glueContext.create_dynamic_frame.from_options(
     connection_type="s3",
     format="csv",
     connection_options={
-        "paths": ["s3://pdax-data-dev-trxn-pull-staging/manual_files/pdax_prime_user/"],
+        "paths": ["s3://pdax-data-dev-trxn-pull-raw/manual_files/prime_users_tagging/"],
         "recurse": True,
     },
     transformation_ctx="S3bucket_prime_user_node0",
@@ -98,10 +98,11 @@ masterdata_mapping_node2.toDF().createOrReplaceTempView("master_clients")
 S3bucket_prime_user_node0.toDF().createOrReplaceTempView("prime_users")
 query = """
 SELECT email,user_id,guid,
-case when clients.email = lower(prime.username) then prime.user_tier else clients.tier end as tier,
+case when clients.email = lower(prime.username) and trim(length(prime.user_tier)) !=0 then trim(prime.user_tier) else clients.tier end as tier,
 prime.sub_group,prime.javi_clients,
 verification_state,first_name,middle_name,last_name,name_suffix,sex,country_code,
-case when clients.email = lower(prime.username) then replace(prime.contact_number,' ','') else clients.contact_no end as contact_no,
+case when clients.email = lower(prime.username) and trim(length(prime.contact_number)) != 0
+then replace(trim(prime.contact_number),' ','') else clients.contact_no end as contact_no,
 birthdate,birth_country,birth_city,nationality,region,address_line_1,
 address_line_2,city,country,iso_country_code,zipcode,income_source,
 submitted_id,application_id,verification_id,status,error,verified_by,
@@ -129,15 +130,7 @@ CASE
     WHEN UPPER(country_code) LIKE 'PH%' THEN '63' 
     ELSE country_code 
 END AS country_code,
-CASE 
-    WHEN country_code = '+63' and (contact_no like '63%' AND length(contact_no) < 10) THEN replace(contact_no,'63','')
-    WHEN country_code = '+63' and (length(contact_no) < 10 and contact_no like '+%') THEN replace(replace(contact_no,'+63',''),'+','')
-    WHEN country_code = '+63' THEN substr(contact_no,-10)
-    WHEN country_code LIKE 'PH%' THEN substr(contact_no,-10)
-    WHEN country_code != '+63' and length(contact_no) < 10 THEN contact_no
-    WHEN country_code in ('+998','+974','+852') and length(contact_no) > 10 THEN substr(contact_no,4)
-    ELSE contact_no 
-END AS contact_no,
+contact_no,
 CASE
     WHEN (birthdate = '-' or UPPER(birthdate) = 'INVALID DATE' or birthdate = '0' or birthdate = '') THEN null
     WHEN length(birthdate) = 10 THEN date_format(to_date(birthdate, 'yyyy-MM-dd'),'yyyy-MM-dd')
@@ -245,7 +238,15 @@ last_name,
 name_suffix,
 sex,
 country_code,
-contact_no,
+CASE 
+    WHEN country_code = '+63' and (contact_no like '63%' AND length(contact_no) < 10) THEN replace(contact_no,'63','')
+    WHEN country_code = '+63' and (length(contact_no) < 10 and contact_no like '+%') THEN replace(replace(contact_no,'+63',''),'+','')
+    WHEN country_code = '+63' THEN substr(contact_no,-10)
+    WHEN country_code LIKE 'PH%' THEN substr(contact_no,-10)
+    WHEN country_code != '+63' and length(contact_no) < 10 THEN contact_no
+    WHEN country_code in ('+998','+974','+852') and length(contact_no) > 10 THEN substr(contact_no,4)
+    ELSE contact_no 
+END AS contact_no,
 birthdate,
 birth_country,
 birth_city,
