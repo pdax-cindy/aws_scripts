@@ -108,13 +108,25 @@ S3bucket_prime_corporate_node3 = glueContext.create_dynamic_frame.from_options(
     transformation_ctx="S3bucket_prime_corporate_node3",
 )
 
+S3bucket_prime_corporate_kyc_onboarded_node4 = glueContext.create_dynamic_frame.from_options(
+    format_options={"quoteChar": '"', "withHeader": True, "separator": ","},
+    connection_type="s3",
+    format="csv",
+    connection_options={
+        "paths": [
+            "s3://pdax-data-dev-trxn-pull-raw/manual_files/pdax_prime_corporate_clients_kyc_onboarded/"
+        ],
+        "recurse": True,
+    },
+    transformation_ctx="S3bucket_prime_corporate_kyc_onboarded_node4",
+)
 S3bucket_prime_user_node0.toDF().createOrReplaceTempView("prime_tagging_users")
 S3bucket_prime_user_upgrade_node2.toDF().createOrReplaceTempView("prime_users_upgrade")
 S3bucket_prime_user_historical_node1.toDF().createOrReplaceTempView("prime_users_historical")
 S3bucket_premium_user_node0.toDF().createOrReplaceTempView("premium_users_upgrade")
 S3bucket_premium_user_historical_node1.toDF().createOrReplaceTempView("premium_users_historical")
 S3bucket_prime_corporate_node3.toDF().createOrReplaceTempView("prime_corporate_clients")
-
+S3bucket_prime_corporate_kyc_onboarded_node4.toDF().createOrReplaceTempView("prime_corporate_kyc_onboarded")
 query = """
 SELECT *,
 CASE 
@@ -221,21 +233,45 @@ prime_upgrade = spark.sql(query)
 query = """
 SELECT 
 lower(email) as email,
-client_entity_name,
+UPPER(client_entity_name) as client_name,
 date_of_onboarding as date_of_onboarding_raw,
 date_format(to_date(date_of_onboarding, 'M/d/yy'),'yyyy-MM-dd') as date_of_onboarding,
 'prime_corporate' as tagging
 FROM
 prime_corporate_clients
 """
-prime_corp = spark.sql(query)
+prime_corp = spark.sql(query).createOrReplaceTempView("prime_corp_df")
+prime_corp1 = spark.sql(query)
 
+query = """
+SELECT
+UPPER(Client_Name) as client_name,
+Country_of_Incorporation as country_of_incorporation,
+date_format(to_date(Date_Completed, 'M/d/yy'),'yyyy-MM-dd') as date_completed,
+'prime_corporate_kyc_onboarded' as tagging
+FROM
+prime_corporate_kyc_onboarded
+"""
+prime_corp_kyc_onboarded = spark.sql(query).createOrReplaceTempView("prime_corp_kyc_df")
+prime_corp2 = spark.sql(query)
+
+query = """
+SELECT
+a.email,
+a.client_name,
+b.country_of_incorporation,
+a.date_of_onboarding,
+b.date_completed as date_completed_kyc_onboarded,
+'prime_corp_kyc' as tagging
+FROM
+prime_corp_df a
+LEFT JOIN prime_corp_kyc_df b 
+ON a.client_name = b.client_name
+"""
+prime_corp_kyc = spark.sql(query)
 spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-prime_upgrade.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
-premium_upgrade.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
-prime_hist.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
-premium_hist.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
-prime_tagging.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
-prime_corp.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
+prime_corp1.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
+prime_corp2.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
+prime_corp_kyc.repartition(1).write.partitionBy("tagging").mode("overwrite").option("header","true").csv("s3://pdax-data-"+env+"-trxn-pull-staging/prime-users/")
 job.commit()
 
