@@ -103,6 +103,7 @@ cast(fee as decimal(19,6)) as fee,
 channel,
 producttype,
 tradedccy,
+'market' as order_type,
 process_date_timestamp,
 p_date
 FROM(
@@ -229,6 +230,16 @@ osl_debit = spark.sql(query).createOrReplaceTempView("osl_debit")
 start_date, end_date, now_date = get_dates()
 query="""
 SELECT *,
+CASE
+WHEN (fee is NULL OR fee = '' OR LENGTH(fee) = 0) OR (php_amount is NULL OR php_amount = '' OR LENGTH(php_amount) = 0) THEN 'crypto'
+WHEN ROUND(fee/php_amount*1000)*10 = 40 THEN 'limit'
+WHEN ROUND(fee/php_amount*1000)*10 = 50 THEN 'market'
+WHEN ROUND(fee/a.php_amount*1000)*10 = 0 THEN 'no_fee'
+WHEN ROUND(fee/php_amount*10000)*1 = 5 THEN 'remittance'
+WHEN ROUND(fee/php_amount*10000)*1 between 31 AND 39 THEN 'limit'
+WHEN ROUND(fee/php_amount*10000)*1 between 51 AND 59 THEN 'market'
+ELSE 'other' END AS order_type,
+from_utc_timestamp('{}', 'Asia/Manila') as process_date_timestamp,
 to_date(transactiondatetime) as p_date
 FROM(
 SELECT
@@ -249,8 +260,7 @@ CASE WHEN a.transactiontype = 'sell' AND a.credit_ccy in ('PHP','PHPT') then a.f
 end as fee,
 a.channel,
 a.producttype,
-CASE WHEN b.debit_ccy in ('PHPT','PHP') then a.credit_ccy else b.debit_ccy end as tradedccy,
-from_utc_timestamp('{}', 'Asia/Manila') as process_date_timestamp
+CASE WHEN b.debit_ccy in ('PHPT','PHP') then a.credit_ccy else b.debit_ccy end as tradedccy
 FROM
 osl_credit a
 LEFT JOIN
